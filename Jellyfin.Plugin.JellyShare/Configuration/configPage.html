@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JellyShare</title>
+</head>
+<body>
+<div id="JellySharePage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-select">
+    <div data-role="content">
+        <div class="content-primary">
+
+            <form id="JellyShareConfigForm" style="margin-bottom:2em;">
+                <h2>Settings</h2>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="DefaultExpiryDays">
+                        Default validity of new links (days, 0 = never)
+                    </label>
+                    <input is="emby-input" type="number" id="DefaultExpiryDays" min="0" />
+                </div>
+                <button is="emby-button" type="submit" class="raised button-submit block">
+                    <span>Save</span>
+                </button>
+            </form>
+
+            <h2>Create a new share</h2>
+            <p class="fieldDescription">
+                Enter the item id of the video. You can find it in the web interface in the
+                address bar when you open a media item (the <code>id=</code> parameter).
+            </p>
+            <div class="inputContainer">
+                <input is="emby-input" type="text" id="NewItemId" placeholder="Item id (GUID)" />
+            </div>
+            <div class="inputContainer">
+                <input is="emby-input" type="number" id="NewExpiryDays" min="0"
+                       placeholder="Days (empty = default)" />
+            </div>
+            <button is="emby-button" type="button" id="CreateShareBtn" class="raised block">
+                <span>Create share link</span>
+            </button>
+
+            <h2 style="margin-top:2em;">Existing shares</h2>
+            <div id="SharesList"></div>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = "eb5d7894-8eef-4b36-aa6f-5d124e828ce1";
+
+            function loadConfig() {
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    document.getElementById('DefaultExpiryDays').value = config.DefaultExpiryDays;
+                });
+            }
+
+            function fullUrl(relative) {
+                // ApiClient.serverAddress() returns the base URL of the server.
+                return ApiClient.serverAddress() + relative;
+            }
+
+            function copyToClipboard(text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(function () {
+                        Dashboard.alert('Link copied to clipboard.');
+                    }, function () {
+                        Dashboard.alert(text);
+                    });
+                } else {
+                    Dashboard.alert(text);
+                }
+            }
+
+            function loadShares() {
+                ApiClient.ajax({
+                    type: 'GET',
+                    url: ApiClient.getUrl('JellyShare/Shares'),
+                    dataType: 'json'
+                }).then(function (shares) {
+                    var container = document.getElementById('SharesList');
+                    if (!shares.length) {
+                        container.innerHTML = '<p>No shares yet.</p>';
+                        return;
+                    }
+                    var html = '<table style="width:100%;border-collapse:collapse;">';
+                    html += '<tr style="text-align:left;"><th>Item</th><th>Expires</th><th>Actions</th></tr>';
+                    shares.forEach(function (s) {
+                        var expiry = s.ExpiresUtc ? new Date(s.ExpiresUtc).toLocaleString() : 'never';
+                        if (s.IsExpired) { expiry = 'expired'; }
+                        var link = fullUrl(s.Url);
+                        html += '<tr style="border-top:1px solid #333;">'
+                            + '<td>' + s.ItemName + '</td>'
+                            + '<td>' + expiry + '</td>'
+                            + '<td style="white-space:nowrap;">'
+                            + '<a href="' + link + '" target="_blank" style="margin-right:1em;">open</a>'
+                            + '<button is="emby-button" class="raised js-copy" data-url="' + link
+                            + '" style="margin-right:.5em;"><span>Copy link</span></button>'
+                            + '<button is="emby-button" class="raised js-del" data-token="'
+                            + s.Token + '"><span>Delete</span></button>'
+                            + '</td>'
+                            + '</tr>';
+                    });
+                    html += '</table>';
+                    container.innerHTML = html;
+
+                    Array.prototype.forEach.call(container.querySelectorAll('.js-del'), function (btn) {
+                        btn.addEventListener('click', function () {
+                            deleteShare(btn.getAttribute('data-token'));
+                        });
+                    });
+                    Array.prototype.forEach.call(container.querySelectorAll('.js-copy'), function (btn) {
+                        btn.addEventListener('click', function () {
+                            copyToClipboard(btn.getAttribute('data-url'));
+                        });
+                    });
+                });
+            }
+
+            function createShare() {
+                var itemId = document.getElementById('NewItemId').value.trim();
+                var days = document.getElementById('NewExpiryDays').value.trim();
+                if (!itemId) { Dashboard.alert('Please enter an item id.'); return; }
+
+                var url = ApiClient.getUrl('JellyShare/Shares/' + itemId);
+                if (days !== '') { url += '?expiryDays=' + encodeURIComponent(days); }
+
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({ type: 'POST', url: url, dataType: 'json' }).then(function () {
+                    Dashboard.hideLoadingMsg();
+                    document.getElementById('NewItemId').value = '';
+                    document.getElementById('NewExpiryDays').value = '';
+                    loadShares();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not create a share. Is the item id correct?');
+                });
+            }
+
+            function deleteShare(token) {
+                ApiClient.ajax({
+                    type: 'DELETE',
+                    url: ApiClient.getUrl('JellyShare/Shares/' + encodeURIComponent(token))
+                }).then(loadShares);
+            }
+
+            document.querySelector('#JellySharePage').addEventListener('pageshow', function () {
+                loadConfig();
+                loadShares();
+            });
+
+            document.querySelector('#CreateShareBtn').addEventListener('click', createShare);
+
+            document.querySelector('#JellyShareConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    config.DefaultExpiryDays = parseInt(document.getElementById('DefaultExpiryDays').value, 10) || 0;
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+                return false;
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+---
+name: "JellyShare"
+guid: "eb5d7894-8eef-4b36-aa6f-5d124e828ce1"
+version: "1.0.0.0"
+targetAbi: "10.10.0.0"
+framework: "net8.0"
+owner: "stephane"
+overview: "Public, time-limited share links for videos."
+description: >
+  Creates secret token links that let individual videos be played without a
+  Jellyfin login, in an embedded web player. Links can have an expiry date and
+  can be revoked at any time.
+category: "General"
+artifacts:
+  - "Jellyfin.Plugin.JellyShare.dll"

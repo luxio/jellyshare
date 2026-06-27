@@ -1,0 +1,10 @@
+bin/
+obj/
+dist/
+*.user
+.vs/
+.idea/
+*.zip
+
+# Claude Code workspace settings (machine-local)
+.claude/

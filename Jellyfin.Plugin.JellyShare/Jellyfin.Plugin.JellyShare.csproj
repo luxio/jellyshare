@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.JellyShare</RootNamespace>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The Jellyfin interfaces. Pick a version close to your server version. -->
+    <PackageReference Include="Jellyfin.Controller" Version="10.10.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The HTML configuration page is embedded into the DLL. -->
+    <None Remove="Configuration\configPage.html" />
+    <EmbeddedResource Include="Configuration\configPage.html" />
+    <!-- The client script for the web interface, also embedded. -->
+    <None Remove="ClientScript\jellyshare.js" />
+    <EmbeddedResource Include="ClientScript\jellyshare.js" />
+  </ItemGroup>
+
+</Project>
