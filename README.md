@@ -19,9 +19,10 @@ Shares are stored in `<data-folder>/plugins/configurations/JellyShare/shares.jso
 
 ## Requirements
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- Jellyfin server 10.10.x (for other versions, adjust the `Version` in the `.csproj`
-  and `targetAbi` in `build.yaml`)
+- [.NET 9 SDK](https://dotnet.microsoft.com/download) (Jellyfin 10.11 targets .NET 9)
+- Jellyfin server 10.11.x (for other versions, adjust the `TargetFramework` and
+  `Jellyfin.Controller` `Version` in the `.csproj`, and `framework`/`targetAbi` in
+  `build.yaml` — note Jellyfin 10.10 and earlier use .NET 8)
 
 ## Build
 

@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using Jellyfin.Plugin.JellyShare.Services;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.JellyShare.Api;
 
@@ -18,11 +20,16 @@ public class PublicShareController : ControllerBase
 {
     private readonly ShareManager _shareManager;
     private readonly ILibraryManager _libraryManager;
+    private readonly ILogger<PublicShareController> _logger;
 
-    public PublicShareController(ShareManager shareManager, ILibraryManager libraryManager)
+    public PublicShareController(
+        ShareManager shareManager,
+        ILibraryManager libraryManager,
+        ILogger<PublicShareController> logger)
     {
         _shareManager = shareManager;
         _libraryManager = libraryManager;
+        _logger = logger;
     }
 
     /// <summary>HTML page with an embedded video player.</summary>
@@ -56,17 +63,140 @@ public class PublicShareController : ControllerBase
         var share = _shareManager.GetByToken(token);
         if (share is null || share.IsExpired)
         {
+            _logger.LogWarning("JellyShare: stream rejected, share missing or expired for token {Token}", token);
             return NotFound();
         }
 
         var item = _libraryManager.GetItemById(share.ItemId);
-        if (item is null || string.IsNullOrEmpty(item.Path) || !System.IO.File.Exists(item.Path))
+        if (item is null)
         {
+            _logger.LogWarning("JellyShare: stream item {ItemId} not found", share.ItemId);
             return NotFound();
         }
 
-        var stream = new FileStream(item.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return File(stream, GetContentType(item.Path), enableRangeProcessing: true);
+        foreach (var candidate in GetCandidatePaths(item))
+        {
+            var resolved = ResolveRealPath(candidate);
+            if (resolved is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                var stream = new FileStream(resolved, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return File(stream, GetContentType(resolved), enableRangeProcessing: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "JellyShare: could not open {Path} for item {ItemId}", resolved, item.Id);
+            }
+        }
+
+        _logger.LogWarning(
+            "JellyShare: no openable file for item {ItemId} (type {Type}). item.Path={ItemPath}",
+            item.Id,
+            item.GetType().Name,
+            item.Path);
+        return NotFound();
+    }
+
+    /// <summary>
+    /// Candidate file paths for an item: item.Path plus the media-source paths
+    /// (with path substitution applied, as Jellyfin does for playback).
+    /// </summary>
+    private List<string> GetCandidatePaths(MediaBrowser.Controller.Entities.BaseItem item)
+    {
+        var paths = new List<string>();
+        void Add(string? p)
+        {
+            if (!string.IsNullOrEmpty(p) && !paths.Contains(p))
+            {
+                paths.Add(p);
+            }
+        }
+
+        Add(item.Path);
+        try
+        {
+            foreach (var source in item.GetMediaSources(true))
+            {
+                Add(source.Path);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "JellyShare: GetMediaSources failed for item {ItemId}", item.Id);
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    /// Resolves a stored path to a real, existing path on disk. Walks the path
+    /// segment by segment and, when an exact match is missing, scans the parent
+    /// directory and matches entries with Unicode normalization. This handles
+    /// NFC/NFD filename mismatches (common when files were created on macOS and
+    /// served from a NAS), where File.Exists with the stored string fails even
+    /// though the file is present.
+    /// </summary>
+    private string? ResolveRealPath(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
+        if (System.IO.File.Exists(path))
+        {
+            return path;
+        }
+
+        // Only absolute POSIX paths can be walked from root this way.
+        if (!path.StartsWith('/'))
+        {
+            return null;
+        }
+
+        var current = "/";
+        foreach (var segment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var next = current + (current.EndsWith('/') ? string.Empty : "/") + segment;
+            if (Directory.Exists(next) || System.IO.File.Exists(next))
+            {
+                current = next;
+                continue;
+            }
+
+            string? match = null;
+            try
+            {
+                var target = segment.Normalize(System.Text.NormalizationForm.FormC);
+                foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+                {
+                    var name = Path.GetFileName(entry).Normalize(System.Text.NormalizationForm.FormC);
+                    if (string.Equals(name, target, StringComparison.Ordinal))
+                    {
+                        match = entry;
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "JellyShare: directory scan failed in {Dir}", current);
+                return null;
+            }
+
+            if (match is null)
+            {
+                return null;
+            }
+
+            current = match;
+        }
+
+        return System.IO.File.Exists(current) ? current : null;
     }
 
     /// <summary>Serves the client script that is injected into the web interface.</summary>
