@@ -1,5 +1,7 @@
 # JellyShare
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 A Jellyfin plugin that makes individual videos publicly available through secret
 **token links with an expiry date** — viewers do not need to log in to Jellyfin.
 The video plays in its own page with an embedded web player. The plugin also adds
@@ -59,3 +61,11 @@ The resulting file is `dist/Jellyfin.Plugin.JellyShare.dll`.
 - Expired shares are rejected but not automatically removed from the file.
 - The context-menu entry currently appears on the item **detail page** only, not on
   small cards in lists.
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0 or later**
+(`GPL-3.0-or-later`) — see the [LICENSE](LICENSE) file for the full text.
+
+Jellyfin itself is GPL-licensed and this plugin links against its interfaces, so
+GPL keeps the plugin aligned with the Jellyfin ecosystem.
