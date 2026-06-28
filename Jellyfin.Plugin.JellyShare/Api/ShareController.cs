@@ -12,11 +12,12 @@ namespace Jellyfin.Plugin.JellyShare.Api;
 
 /// <summary>
 /// Admin API for creating, listing and deleting shares.
-/// [Authorize] ensures that ONLY authenticated Jellyfin users may access this -
-/// the configuration page calls these endpoints with the admin token.
+/// RequiresElevation restricts this to Jellyfin administrators. A plain
+/// [Authorize] would allow any logged-in user to create public links for items
+/// they cannot otherwise access, bypassing per-user library permissions.
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Policy = "RequiresElevation")]
 [Route("JellyShare/Shares")]
 public class ShareController : ControllerBase
 {

@@ -49,8 +49,16 @@ public class PublicShareController : ControllerBase
             return NotFound();
         }
 
+        // Keep the secret token out of Referer headers on any outbound navigation.
+        Response.Headers["Referrer-Policy"] = "no-referrer";
         return Content(BuildHtml(token, item.Name), "text/html");
     }
+
+    /// <summary>Masks a token for logging so the secret never lands in the logs.</summary>
+    private static string Mask(string token) =>
+        string.IsNullOrEmpty(token) ? "(empty)"
+        : token.Length <= 6 ? "******"
+        : token[..6] + "...";
 
     /// <summary>
     /// Delivers the actual video stream (direct play of the original file) with
@@ -63,7 +71,7 @@ public class PublicShareController : ControllerBase
         var share = _shareManager.GetByToken(token);
         if (share is null || share.IsExpired)
         {
-            _logger.LogWarning("JellyShare: stream rejected, share missing or expired for token {Token}", token);
+            _logger.LogWarning("JellyShare: stream rejected, share missing or expired for token {Token}", Mask(token));
             return NotFound();
         }
 

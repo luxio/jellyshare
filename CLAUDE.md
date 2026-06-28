@@ -51,7 +51,7 @@ Key checks after a change: plugin loads (`docker logs jellyshare-test | grep Jel
 
 ## Gotchas
 
-- **Authorization:** use plain `[Authorize]`. The named policy `"DefaultAuthorization"` does **not** exist in current Jellyfin and throws HTTP 500.
+- **Authorization:** admin endpoints use `[Authorize(Policy = "RequiresElevation")]` (verified: non-admins get 403, admins 200). Plain `[Authorize]` only requires *any* authenticated user — which would let non-admins create public shares for items they can't access. The policy `"DefaultAuthorization"` does **not** exist and throws HTTP 500.
 - **Version/ABI must match the server, including the runtime.** Keep `Jellyfin.Controller` version + `TargetFramework` in the `.csproj` and `framework`/`targetAbi` in `build.yaml` aligned with the target Jellyfin release. Jellyfin 10.11 runs on **.NET 9** (`net9.0`); 10.10 and earlier on .NET 8. A wrong TFM fails the build with NU1202; a wrong ABI means the plugin won't load.
 - **Material icon glyphs come from a CSS class** (`.material-icons.<name>:before`), not from ligature text. In the client script, swap the icon by changing the class (e.g. `share` → `public`), not by setting `textContent`, or two glyphs render.
 - The web files live in the image, not a mounted volume: `docker restart` keeps the injected `index.html`; recreating the container (`docker rm` + `run`) starts fresh and re-injects.

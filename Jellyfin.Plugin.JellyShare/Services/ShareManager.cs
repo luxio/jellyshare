@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Jellyfin.Plugin.JellyShare.Models;
 using MediaBrowser.Common.Configuration;
@@ -59,7 +60,7 @@ public class ShareManager
     {
         lock (_lock)
         {
-            return _shares.FirstOrDefault(s => s.Token == token);
+            return _shares.FirstOrDefault(s => TokensEqual(s.Token, token));
         }
     }
 
@@ -67,7 +68,7 @@ public class ShareManager
     {
         lock (_lock)
         {
-            var removed = _shares.RemoveAll(s => s.Token == token) > 0;
+            var removed = _shares.RemoveAll(s => TokensEqual(s.Token, token)) > 0;
             if (removed)
             {
                 Save();
@@ -100,6 +101,21 @@ public class ShareManager
     {
         var json = JsonSerializer.Serialize(_shares, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(_storePath, json);
+    }
+
+    /// <summary>Constant-time token comparison to avoid timing side channels.</summary>
+    private static bool TokensEqual(string a, string b)
+    {
+        if (a is null || b is null)
+        {
+            return false;
+        }
+
+        // FixedTimeEquals is constant-time for equal-length inputs and returns
+        // false for differing lengths (token length is fixed, so this is fine).
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(a),
+            Encoding.UTF8.GetBytes(b));
     }
 
     /// <summary>Cryptographically random, URL-safe token.</summary>
